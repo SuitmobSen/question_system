@@ -3,10 +3,6 @@ from django.shortcuts import render
 # Create your views here.
 
 
-def profile(request):
-    pass
-
-
 def change_passwd(request):
     pass
 
@@ -21,6 +17,7 @@ def collect(request):
 
 def contribution(request):
     pass
+
 
 def approval(request):
     pass

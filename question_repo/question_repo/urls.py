@@ -20,9 +20,8 @@ from . import views
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
     url(r"^logtest/$", views.logtest, name="logtest"),
-    url(r"^accounts/", include("apps.accouts.urls", namespace="accounts")),
+    url(r"^accounts/", include("apps.accounts.urls", namespace="accounts")),
     url(r'^apis/', include('apps.apis.urls', namespace="apis")),
     url(r'^uc/', include('apps.usercenter.urls', namespace="uc")),
     url(r'^', include('apps.repo.urls', namespace="repo")),
-
 ]
