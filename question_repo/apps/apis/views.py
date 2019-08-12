@@ -2,7 +2,11 @@
 
 from django.shortcuts import render, HttpResponse
 from django.http import JsonResponse
+from django.views.generic import View
+from apps.repo.models import Questions, QuestionsCollection, Answers, AnswersCollection
+from django.forms.models import model_to_dict
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.template import loader
 from libs import sms
 import random
 import logging
@@ -60,3 +64,148 @@ def check_captcha(request):
     return JsonResponse(ret)
 
 
+from django.db.models import Q
+class QuestionsView(View):
+    def get(self, request):
+        """
+        :param request:
+        :return:
+        """
+        page = int(request.GET.get("page", 1))
+        pagesize = int(request.GET.get("pagesize", 25))
+        offset = int(request.GET.get("offset", 0))
+        grade = int(request.GET.get("grade", 0))
+        category = int(request.GET.get("category", 0))
+        status = int(request.GET.get("status", 0))
+        search = request.GET.get("search", "")
+
+        questions_list = Questions.objects.filter(status=True)
+        if search:
+            if search.isdigit():
+                questions_list = questions_list.filter(
+                    Q(id=search) | Q(content__icontains=search) | Q(title__icontains=search))
+            else:
+                questions_list = questions_list.filter(Q(content__icontains=search) | Q(title__icontains=search))
+
+        if grade:
+            questions_list = questions_list.filter(grade=grade)
+        if category:
+            questions_list = questions_list.filter(category__id=category)
+
+        # 筛选状态 => 我的答题表
+
+        questions_list = questions_list.values('id', 'title', 'grade', 'answer')
+        total = len(questions_list)
+
+        # 计算当前页面的数据
+        questions_list = questions_list[offset:offset + pagesize]
+
+        # 用于计算当前登录的用户是否收藏对应的题目，如果收藏则是实心True，未收藏是空心False
+        for item in questions_list:
+            item["collection"] = True if QuestionsCollection.objects.filter(
+                user=request.user, status=True, question_id=item["id"]) else False
+
+        # 格式是bootstrap-table要求的格式
+        questions_dict = {'total': total, 'rows': list(questions_list)}
+        return JsonResponse(questions_dict)
+
+
+class QuestionCollectionView(View):
+    def get(self, request, id):
+        """
+                当用户点击该题目时，首先获取该题目，并检查该题目是否已被操作过
+                修改当前题目的收藏状态
+                返回json数据
+                id => 题目的ID
+                """
+        question = Questions.objects.get(id=id)
+        result = QuestionsCollection.objects.get_or_create(user=request.user, question=question)
+        # result是一个元组，第一参数是instance, 第二个参数是true和false
+        # True表示新创建,False表示老数据
+        question_collection = result[0]
+        if not result[1]:
+            # print('x',answer_collection.status)
+            if question_collection.status:
+                question_collection.status = False
+            else:
+                question_collection.status = True
+        question_collection.save()
+        msg = model_to_dict(question_collection)
+        ret_info = {"code": 200, "msg": msg}
+        return JsonResponse(ret_info)
+
+
+class AnswerView(LoginRequiredMixin, View):
+    """参考答案"""
+    def get(self, request, id):
+        # answer = Questions.objects.get(id=id)
+        my_answer = Answers.objects.filter(question=id, user=request.user)
+        if not my_answer:
+            question = {"answer": "请回答后再查看参考答案"}
+            return JsonResponse(question, safe=False)
+        try:
+            # model_to_dict适合Model-Object
+            # serializers适合queryset
+            # question = model_to_dict(Questions.objects.get(id=id))
+            # question = serializers.serialize('json', Questions.objects.filter(id=id))
+            # question = serializers.serialize('json', Questions.objects.filter(id=id))
+            question = Questions.objects.filter(id=id).values()[0]
+        except Exception as ex:
+            print(ex)
+            question = {}
+        return JsonResponse(question, safe=False)
+
+
+class OtherAnswerView(LoginRequiredMixin, View):
+    """其他回答"""
+
+    def get(self, request, id):
+        # other_answer = list(Answers.objects.filter(question=id).values())
+        # other_answer = serializers.serialize('json', Answers.objects.filter(question=id))
+        # return JsonResponse(other_answer, safe=False)
+
+        my_answer = Answers.objects.filter(question=id, user=request.user)
+        if not my_answer:
+            html = "请回答后再查看其他答案"
+            return HttpResponse(html)
+
+        other_answer = Answers.objects.filter(question=id).exclude(user=request.user)
+        # other_answer = Answers.objects.filter(question=id)
+
+        if other_answer:
+            for answer in other_answer:
+                if AnswersCollection.objects.filter(answer=answer, user=request.user, status=True):
+                    answer.collect_status = 1  # => 控制爱心=>空心/实心
+                # 外键 AnswersCollectionObject.answer=>related_name
+                # answer被收藏哪些人收藏了
+                # answer.answers_collection_set.filter(status=True)
+                answer.collect_nums = answer.answers_collection_set.filter(status=True).count()
+                # answer.answers_collection_set
+            # 通过后端渲染出HTML
+            # html = loader.render_to_string('question_detail_other_answer.html', {"other_answer": other_answer})
+            html = loader.get_template('question_detail_other_answer.html').render({"other_answer": other_answer})
+        else:
+            html = "暂无回答"
+        return HttpResponse(html)
+
+
+class AnswerCollectionView(LoginRequiredMixin, View):
+    """答案收藏"""
+
+    def get(self, request, id):
+        answer = Answers.objects.get(id=id)
+        result = AnswersCollection.objects.get_or_create(user=request.user, answer=answer)
+        # result = AnswersCollection.objects.get_or_create(user=request.user, answer_id=1)
+        # True表示新创建,False表示老数据
+        answer_collection = result[0]
+        if not result[1]:
+            # print('x',answer_collection.status)
+            if answer_collection.status: answer_collection.status = False
+            else: answer_collection.status = True
+        answer_collection.save()
+        msg = model_to_dict(answer_collection)
+        msg["collections"] = answer.answers_collection_set.filter(status=True).count()
+        ret_info = {"code": 200, "msg": msg}
+        # print(ret_info)
+        return JsonResponse(ret_info)
+        # return HttpResponse('abc')

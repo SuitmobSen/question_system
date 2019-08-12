@@ -72,11 +72,9 @@ class Login(View):
             session_captcha_code = request.session.get("captcha_code", "")
             logger.debug(f"登录提交验证码:{captcha}-{session_captcha_code}")
             # 验证码一致
-            print("hello")
             if captcha.lower() == session_captcha_code.lower():
                 user, flag = form.check_password()
                 # user = auth.authenticate(username=username, password=password)
-                print("hello")
                 if flag and user and user.is_active:
                     auth.login(request, user)
                     logger.info(f"{user.username}登录成功")

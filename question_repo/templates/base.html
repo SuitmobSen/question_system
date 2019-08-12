@@ -55,8 +55,8 @@
                   </ul>
                   <ul class="nav pull-right top-menu">
                       <li>
-                          <form action="/question/">
-                             <input type="text" class="form-control search" placeholder="Search" name="search" id="search">
+                          <form action="{% url "repo:questions" %}">
+                             <input type="text" class="form-control search" placeholder="Search" name="search" id="search" value="{{ search }}">
                           </form>
                       </li>
                       <!-- user login dropdown start-->
