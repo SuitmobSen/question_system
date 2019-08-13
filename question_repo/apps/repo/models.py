@@ -1,12 +1,14 @@
 from django.db import models
-
+from django.db.models import Count
 # Create your models here.
 from apps.accounts.models import User
 from .validator import valid_difficulty
 from ckeditor.fields import RichTextField
 # 含文件上传
 from ckeditor_uploader.fields import RichTextUploadingField
-
+from django.core.exceptions import ValidationError
+import logging
+logger = logging.getLogger("repo")
 
 
 class Category(models.Model):
@@ -89,9 +91,25 @@ class QuestionsCollection(models.Model):
         return f"{self.user}:{ret}:{self.question.title}"
 
 
+class AnswersManager(models.Manager):
+    def hot_question(self):
+        """热门题目"""
+        # question = self.values('question').annotate(Count('id'))
+        # print(question)
+        question = self.raw("select repo_answers.id as answer_id, repo_questions.id as id, count(repo_answers.id) as answer_num, repo_questions.title, repo_questions.grade from repo_answers left join repo_questions on repo_answers.question_id = repo_questions.id GROUP BY repo_questions.title ORDER BY answer_num desc limit 5;")
+        return question
+
+    def hot_user(self):
+        """30热门用户"""
+        import datetime
+        today_30 = datetime.date.today() + datetime.timedelta(days=-30)
+        user_rank = self.filter(last_modify__gte=today_30).values('user__username').annotate(Count('id')).order_by("-id__count")[:5]
+        return user_rank
+
+
 class Answers(models.Model):
     """答题记录"""
-    # objects = AnswersManager()
+    objects = AnswersManager()
     # exam = models.ForeignKey(ExamQuestions, verbose_name="所属试卷", null=True, blank=True)
     question = models.ForeignKey(Questions, verbose_name="题目")
     answer = models.TextField(verbose_name="学生答案")
@@ -128,3 +146,33 @@ class AnswersCollection(models.Model):
         if self.status: ret="收藏"
         else: ret="取消收藏"
         return f"{self.user}:{ret}:{self.answer}"
+
+
+class UserLog(models.Model):
+    """用户日志"""
+    OPERATE = ((1, "收藏"), (2, "取消收藏"), (3, "回答"))
+    user = models.ForeignKey(User, verbose_name="用户")
+    operate = models.CharField(choices=OPERATE, max_length=10, verbose_name="操作")
+    question = models.ForeignKey(Questions, verbose_name="题目", null=True, blank=True)
+    answer = models.ForeignKey(Answers, verbose_name="回答", null=True, blank=True)
+    create_time = models.DateTimeField(verbose_name="回答时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "用户日志"
+        verbose_name_plural = verbose_name
+        ordering = ["-create_time"]
+
+    def __str__(self):
+        msg = ""
+        if self.question:
+            msg = self.question.title
+        elif self.answer:
+            msg = self.answer
+        return f"{self.user}{self.operate}{msg}"
+
+    def save(self, *args, **kwargs):
+        if self.question or self.answer:
+            super().save()
+        else:
+            logger.error("出错了，操作日志必须有一个操作对象")
+            raise ValidationError("必须有一个操作对象,出错了")

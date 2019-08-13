@@ -3,9 +3,13 @@ import logging
 
 # Create your views here.
 
-
 logger = logging.getLogger("apis")
+
 
 def logtest(request):
     logger.info("欢迎访问")
     return  HttpResponse("日志测试")
+
+
+def test_avator(request):
+    return render(request, "test.html")

@@ -1,6 +1,7 @@
 from django.shortcuts import render, HttpResponse
 from django.contrib.auth.decorators import login_required
-from .models import Questions, Category, Answers
+from .models import Questions, Category, Answers, UserLog
+from apps.accounts.models import User
 from django.views.generic import View, DetailView
 from django.contrib.auth.mixins import LoginRequiredMixin
 import json
@@ -12,14 +13,27 @@ from django.db import transaction
 
 logger = logging.getLogger("repo")
 
+
 def test(request):
     return HttpResponse("题库视图")
 
 
 # # 要求用户需要登录了才能访问该页面，如果没有登录，跳转到 ==》/accounts/login
-# @login_required()
+@login_required()
 def index(request):
-    return render(request, "index.html")
+    userlog = UserLog.objects.all().order_by("-create_time")[:10]
+    operator = dict(UserLog.OPERATE)
+    for log in userlog:
+        log.operate_cn = operator[int(log.operate)]
+    recent_user_ids = [item["user"] for item in UserLog.objects.filter(operate=3).values("user").distinct()[:10]]
+    print(recent_user_ids)
+    recent_user = User.objects.filter(id__in=recent_user_ids)
+    print(recent_user)
+    kwgs = {
+        "userlog": userlog,
+        "recent_user": recent_user,
+    }
+    return render(request, "index.html", kwgs)
 
 
 class QuestionsList(View):
@@ -35,6 +49,7 @@ class QuestionDetail(DetailView):
     model = Questions
     pk_url_kwarg = 'id'
     template_name = "question_detail.html"
+
     # 额外传递my_answer
     def get_context_data(self, **kwargs):
         # kwargs：字典、字典中的数据返回给html页面
@@ -45,13 +60,16 @@ class QuestionDetail(DetailView):
 
     def post(self, request, id):
         try:
-            # 没有回答过。create
-            # 更新回答。get->update
-            # 获取对象，没有获取到直接创建对象
-            new_answer = Answers.objects.get_or_create(question=self.get_object(), user=self.request.user)
-            # 元组：第一个元素获取/创建的对象， True（新创建）/False（老数据）
-            new_answer[0].answer = request.POST.get("answer", "没有提交答案信息")
-            new_answer[0].save()
+            with transaction.atomic():
+                # 没有回答过。create
+                # 更新回答。get->update
+                # 获取对象，没有获取到直接创建对象
+                new_answer = Answers.objects.get_or_create(question=self.get_object(), user=self.request.user)
+                # 元组：第一个元素获取/创建的对象， True（新创建）/False（老数据）
+                new_answer[0].answer = request.POST.get("answer", "没有提交答案信息")
+                new_answer[0].save()
+                # OPERATE = ((1, "收藏"), (2, "取消收藏"), (3, "回答"))
+                UserLog.objects.create(user=request.user, operate=3, question=self.get_object())
             my_answer = json.loads(serializers.serialize("json", [new_answer[0]]))[0]["fields"]
             msg = "提交成功"
             code = 200

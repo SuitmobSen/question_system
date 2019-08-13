@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>测试页面</title>
+</head>
+<body>
+
+{% load thumbnail %}
+<img src="{{ user.avator_sor|thumbnail_url:'avatar' }}" alt="" />
+
+</body>
+</html>

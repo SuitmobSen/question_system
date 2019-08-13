@@ -31,4 +31,6 @@ urlpatterns = [
     url(r'^media/(?P<path>.*)$', serve, {"document_root": MEDIA_ROOT}),
     # ckeditor
     url(r'^ckeditor/', include('ckeditor_uploader.urls')),
+    # 测试缩略图
+    url(r"^test", views.test_avator)
 ]

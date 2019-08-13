@@ -37,12 +37,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    "apps.repo",
+    "apps.repo.apps.RepoConfig",
     "apps.accounts",
     "apps.usercenter",
     "apps.apis",
     "ckeditor",
     "ckeditor_uploader",
+    'easy_thumbnails',
 ]
 
 MIDDLEWARE = [
@@ -68,6 +69,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'question_repo.context_processors.site_info',
+                'apps.repo.context_processors.repo_data',
             ],
         },
     },
@@ -282,4 +285,23 @@ CKEDITOR_CONFIGS = {
     'default': {
         'toolbar': 'Full',
     },
+}
+
+SITE_NAME = '题库系统'
+SITE_DESC = '人生苦短，我用Python'
+SITE_KEYWORDS = 'python, django, flask'
+
+# 配置缩略图（easy_tuhubnail暂时生成不出来...）
+THUMBNAIL_ALIASES = {
+    # target: 'accounts.User' => 给哪个app/Model/Field配置缩略图
+    '': {
+        # avatar: 表示将来引用的名字
+        # crop: False=> 不裁剪、同比例缩小
+        'avatar': {'size': (50, 50), 'crop': True},
+    },
+
+    # 'accounts': {
+    #     'xs': {'size': (30, 30), 'crop': True},
+    #     'xs_nocorp': {'size': (30, 30), 'crop': False},
+    # },
 }
